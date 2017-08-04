@@ -1,0 +1,3 @@
+#!/bin/bash
+
+RUBYOPT="-W0" bundle exec rake test
