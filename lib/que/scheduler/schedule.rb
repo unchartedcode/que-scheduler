@@ -5,7 +5,8 @@ module Que
       #
       #   {
       #     "MakeTea" => {
-      #       "every" => "1m" },
+      #       "every" => "1m" 
+      #     },
       #     "some_name" => {
       #       "cron"        => "5/* * * *",
       #       "class"       => "DoSomeWork",
@@ -135,7 +136,7 @@ module Que
 
       # remove a given schedule by name
       def remove_schedule(name)
-        Que.execute Que::Scheduler::SQL[:destroy_schedule, [name]]
+        Que.execute Que::Scheduler::SQL[:destroy_schedule], [name]
       end
 
     private

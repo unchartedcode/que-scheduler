@@ -6,6 +6,7 @@ group :development, :test do
   gem 'activerecord',    :require => nil
   gem 'pg',              :require => nil, :platform => :ruby
   gem 'minitest-reporters', require: nil
+  gem 'minitest-line', require: nil
   gem 'byebug'
 end
 
