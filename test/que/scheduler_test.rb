@@ -96,4 +96,46 @@ describe Que::Scheduler do
       end
     end
   end
+
+  describe '.enqueue_job' do
+    let(:schedule_time) { Time.now }
+    let(:args) { '/tmp' }
+    let(:scheduler_config) do
+      { 'job_class' => 'TestJob', 'queue' => 'high', 'args'  => args, 'cron' => '* * * * *' }
+    end
+
+    describe 'when it is a que job' do
+      it 'prepares the parameters' do
+        mock_enqueue = MiniTest::Mock.new
+        mock_enqueue.expect :call, nil, ['/tmp', {
+          :job_class => 'TestJob',
+          :queue => 'high'
+        }]
+        
+        Que::Job.stub(:enqueue, mock_enqueue) do
+          Que::Scheduler.enqueue_job(scheduler_config, schedule_time)
+        end
+      end
+
+      it 'sends to execute' do
+        mock_execute = MiniTest::Mock.new
+        mock_execute.expect :call, [
+          {
+            queue: 'high', 
+            priority: 100, 
+            run_at: DateTime.now, 
+            job_class: 'TestJob', 
+            args: ['/tmp']
+          }
+        ], [
+          :insert_job, 
+          ["high", nil, nil, "TestJob", ["/tmp"]]
+        ]
+        
+        Que.stub(:execute, mock_execute) do
+          Que::Scheduler.enqueue_job(scheduler_config, schedule_time)
+        end
+      end
+    end
+  end
 end

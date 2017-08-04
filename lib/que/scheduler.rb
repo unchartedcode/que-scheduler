@@ -1,3 +1,4 @@
+require "que/job"
 require "que/scheduler/version"
 require "que/scheduler/migrations"
 require "que/scheduler/util"
@@ -46,6 +47,58 @@ module Que
         else
           Que.log message: 'SidekiqScheduler is disabled'
         end
+      end
+
+      def try_to_constantize(klass)
+        klass.is_a?(String) ? klass.constantize : klass
+      rescue NameError
+        klass
+      end
+
+      def symbolize_keys!(hash)
+        hash.keys.each do |key|
+          hash[(key.to_sym rescue key) || key] = hash.delete(key)
+        end
+      end
+
+      # Convert the given arguments in the format expected to be enqueued.
+      #
+      # @param [Hash] config the options to be converted
+      # @option config [String] class the job class
+      # @option config [Hash/Array] args the arguments to be passed to the job
+      #   class
+      #
+      # @return [Hash]
+      def prepare_arguments(config)
+        config['job_class'] = try_to_constantize(config['job_class'])
+
+        if config['args'].is_a?(Hash)
+          config['args'].symbolize_keys! if config['args'].respond_to?(:symbolize_keys!)
+        else
+          config['args'] = Array(config['args'])
+        end
+
+        config.delete('cron')
+        config.delete('every')
+
+        symbolize_keys!(config)
+
+        config
+      end
+
+      # Enqueue a job based on a config hash
+      #
+      # @param job_config [Hash] the job configuration
+      # @param time [Time] time the job is enqueued
+      def enqueue_job(job_config, time = Time.now)
+        config = prepare_arguments(job_config.dup)
+
+        if config.delete('include_metadata')
+          config['args'] = arguments_with_metadata(config['args'], scheduled_at: time.to_f)
+        end
+
+        args = config.delete(:args)
+        Que::Job.enqueue *args, config
       end
     end
   end

@@ -54,3 +54,25 @@ DB.drop_table? :que_jobs
 Que::Migrations.migrate!
 DB.drop_table? :que_scheduler
 Que::Scheduler::Migrations.migrate!
+
+# Test Jobs
+class TestJob < Que::Job
+  def run(*args)
+  end
+end
+
+class ArgsJob < Que::Job
+  class << self
+    @passed_args = nil
+    @last_execution = nil
+    attr_accessor :passed_args
+    attr_accessor :last_execution
+  end
+
+  def run(*args)
+    self.class.passed_args = args
+    self.class.last_execution = DateTime.now
+  end
+end
+
+require 'byebug'

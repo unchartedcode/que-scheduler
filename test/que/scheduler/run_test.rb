@@ -1,19 +1,4 @@
 require 'test_helper'
-require 'byebug'
-
-class ArgsJob < Que::Job
-  class << self
-    @passed_args = nil
-    @last_execution = nil
-    attr_accessor :passed_args
-    attr_accessor :last_execution
-  end
-
-  def run(*args)
-    self.class.passed_args = args
-    self.class.last_execution = DateTime.now
-  end
-end
 
 describe Que::Job, '.run' do
   before do
