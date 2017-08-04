@@ -9,6 +9,7 @@ describe Que::Scheduler do
   describe 'load_schedule' do
     before do
       DB[:que_jobs].delete
+      DB[:que_scheduler].delete
     end
 
     describe 'when scheduler enabled option is false' do
@@ -16,16 +17,16 @@ describe Que::Scheduler do
         {
           'some_ivar_job' => {
             'every' => '10m',
-            'class' => 'SomeIvarJob',
-            'args' => { path: '/tmp ' }
+            'job_class' => 'SomeIvarJob',
+            'args' => { path: '/tmp ' },
+            'enabled' => true
           }
         }
       end
 
       before do
         Que::Scheduler.enabled = false
-        Que.schedule = job_schedule
-        Que::Scheduler.load_schedule!
+        Que::Scheduler.load_schedule!(job_schedule)
       end
 
       it 'does not increase the jobs amount' do
@@ -43,7 +44,7 @@ describe Que::Scheduler do
         {
           'some_ivar_job' => {
             'every' => '10m',
-            'class' => 'SomeIvarJob',
+            'job_class' => 'SomeIvarJob',
             'args' => [ '/tmp' ],
             'enabled' => false
           }
@@ -52,8 +53,7 @@ describe Que::Scheduler do
 
       before do
         Que::Scheduler.enabled = true
-        Que.schedule = job_schedule
-        Que::Scheduler.load_schedule!
+        Que::Scheduler.load_schedule!(job_schedule)
       end
 
       it 'does not increase the jobs amount' do
@@ -71,7 +71,7 @@ describe Que::Scheduler do
         {
           'some_ivar_job' => {
             'every' => '10m',
-            'class' => 'SomeIvarJob',
+            'job_class' => 'SomeIvarJob',
             'args' => { path: '/tmp ' },
             'enabled' => true
           }
@@ -80,8 +80,7 @@ describe Que::Scheduler do
 
       before do
         Que::Scheduler.enabled = true
-        Que.schedule = job_schedule
-        Que::Scheduler.load_schedule!
+        Que::Scheduler.load_schedule!(job_schedule)
       end
 
       it 'does increase the jobs amount' do
@@ -113,12 +112,31 @@ describe Que::Scheduler do
         }]
         
         Que::Job.stub(:enqueue, mock_enqueue) do
-          Que::Scheduler.enqueue_job(scheduler_config, schedule_time)
+          Que.set_schedule('test', scheduler_config)
         end
       end
 
       it 'sends to execute' do
         mock_execute = MiniTest::Mock.new
+        mock_execute.expect :call, [{}], [
+          Que::Scheduler::SQL[:get_schedule_by_name],
+          ['test']
+        ]
+        mock_execute.expect :call, [{}], [
+          Que::Scheduler::SQL[:insert_schedule],
+          [
+            'test',
+            'TestJob',
+            ['/tmp'],
+            nil,
+            nil,
+            nil
+          ]
+        ]
+        mock_execute.expect :call, [{}], [
+          Que::Scheduler::SQL[:get_scheduled_job],
+          ['test']
+        ]
         mock_execute.expect :call, [
           {
             queue: 'high', 
@@ -133,7 +151,7 @@ describe Que::Scheduler do
         ]
         
         Que.stub(:execute, mock_execute) do
-          Que::Scheduler.enqueue_job(scheduler_config, schedule_time)
+          Que.set_schedule('test', scheduler_config)
         end
       end
     end

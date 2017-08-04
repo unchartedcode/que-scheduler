@@ -10,20 +10,13 @@ module Que
         def every(interval)
           @interval = interval
         end
-
-        def schedule(klass, args = {})
-          unless QueJob.where(job_class: klass.to_s).exists?
-            puts 'Scheduling'
-            klass.enqueue args.merge({ start_at: (Time.now - TypeformUpdate.interval).to_f, end_at: Time.now.to_f })
-          end
-        end
       end
 
       attr_reader :start_at, :end_at, :run_again_at, :time_range
 
       def _run
         schedule = Que.execute(Que::Scheduler::SQL[:get_schedule_by_job_id], [attrs[:job_id]]).first
-        if schedule && !schedule['enabled']
+        if schedule && (!schedule['enabled'] || !Que::Scheduler.enabled?)
           destroy unless @destroyed
           return
         end

@@ -3,6 +3,7 @@ require 'test_helper'
 describe Que::Job, '.run' do
   before do
     DB[:que_jobs].delete
+    DB[:que_scheduler].delete
     ArgsJob.passed_args = nil
     ArgsJob.last_execution = nil
   end
@@ -21,7 +22,7 @@ describe Que::Job, '.run' do
       {
         'test_job' => {
           'every' => '10m',
-          'class' => 'ArgsJob',
+          'job_class' => 'ArgsJob',
           'args' => [1, 'two', {three: 3}],
           'enabled' => true
         }
@@ -30,8 +31,7 @@ describe Que::Job, '.run' do
 
     before do
       Que::Scheduler.enabled = true
-      Que.schedule = job_schedule
-      Que::Scheduler.load_schedule!
+      Que::Scheduler.load_schedule!(job_schedule)
       $passed_args = nil
     end
 
@@ -67,6 +67,29 @@ describe Que::Job, '.run' do
       result[:job][:job_class].must_equal 'ArgsJob'
       DB[:que_jobs].count.must_equal 0
       ArgsJob.last_execution.must_be_nil
+    end
+
+    it "should skip the process if que enabled is set to false" do
+      DB[:que_jobs].count.must_equal 1
+      Que::Scheduler.enabled = false
+
+      result = Que::Job.work
+      result[:event].must_equal :job_worked
+      result[:job][:job_class].must_equal 'ArgsJob'
+      DB[:que_jobs].count.must_equal 0
+      ArgsJob.last_execution.must_be_nil
+    end
+
+    it "should reload the schedules if enabled is set to true" do
+      DB[:que_jobs].count.must_equal 1
+      Que::Scheduler.enabled = false
+
+      DB[:que_jobs].count.must_equal 1
+      result = Que::Job.work
+      DB[:que_jobs].count.must_equal 0
+
+      Que::Scheduler.enabled = true
+      DB[:que_jobs].count.must_equal 1
     end
   end
 end

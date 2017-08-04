@@ -36,40 +36,24 @@ module Que
       # param, otherwise params is passed in as the only parameter to perform.
       def schedule=(schedule_hash)
         schedule_hash = prepare_schedule(schedule_hash)
-        to_remove = get_all_schedules.keys - schedule_hash.keys.map(&:to_s)
-
-        schedule_hash.each do |name, job_spec|
-          set_schedule(name, job_spec)
-        end
-
-        to_remove.each do |name|
-          remove_schedule(name)
-        end
-
-        @schedule = schedule_hash
+        load_schedules!(schedule_hash)
       end
 
       def schedule
         @schedule
       end
 
-      # Reloads the schedule from Redis and return it.
+      # Reloads and reprocesses the schedule from PostgresSQL
       #
       # @return Hash
-      def reload_schedule!
-        @schedule = get_schedule
+      def reload_schedules!
+        schedule_hash = get_all_schedules
+        load_schedules!(schedule_hash)
       end
-      alias_method :schedule!, :reload_schedule!
 
       # Retrive the schedule configuration for the given name
-      # if the name is nil it returns a hash with all the
-      # names end their schedules.
-      def get_schedule(name = nil)
-        if name.nil?
-          get_all_schedules
-        else
-          convert_result(Que.execute(Que::Scheduler::SQL[:get_schedule_by_name], [name]))[name]
-        end
+      def get_schedule(name)
+        convert_result(Que.execute(Que::Scheduler::SQL[:get_schedule_by_name], [name]))[name]
       end
 
       def get_all_schedules
@@ -94,7 +78,7 @@ module Que
         unless existing_config && existing_config == config
           Que.execute Que::Scheduler::SQL[:insert_schedule], [
             name,
-            config['class'],
+            config['job_class'],
             [config['args']],
             config['description'],
             config['every'],
@@ -103,18 +87,14 @@ module Que
         end
 
         scheduled_job = Que.execute(Que::Scheduler::SQL[:get_scheduled_job], [name]).first
-        if config['enabled']
+        if config['enabled'] && Que::Scheduler.enabled?
           if scheduled_job
             # Update?
           else
-            # args = config['args'].merge({
-            #                    start_at: (Time.now - Que::Scheduler.parse_in(config['every'])).to_f,
-            #                    end_at: Time.now.to_f
-            #                  })
             job = Que::Job.enqueue(
               *config['args'],
               queue: config['queue'],
-              job_class: config['class']
+              job_class: config['job_class']
             )
 
             data = {
@@ -141,6 +121,20 @@ module Que
 
     private
 
+      def load_schedules!(schedule_hash)
+        to_remove = get_all_schedules.keys - schedule_hash.keys.map(&:to_s)
+        
+        schedule_hash.each do |name, job_spec|
+          set_schedule(name, job_spec)
+        end
+
+        to_remove.each do |name|
+          remove_schedule(name)
+        end
+
+        @schedule = schedule_hash
+      end
+      
       def prepare_schedule(schedule_hash)
         schedule_hash = Que.json_converter.call(schedule_hash)
 
@@ -149,10 +143,10 @@ module Que
         schedule_hash.each do |name, job_spec|
           job_spec = job_spec.dup
 
-          job_class = job_spec.fetch('class', name)
+          job_class = job_spec.fetch('job_class', name)
           inferred_queue = infer_queue(job_class)
 
-          job_spec['class'] ||= job_class
+          job_spec['job_class'] ||= job_class
           job_spec['queue'] ||= inferred_queue unless inferred_queue.nil?
 
           prepared_hash[name] = job_spec
