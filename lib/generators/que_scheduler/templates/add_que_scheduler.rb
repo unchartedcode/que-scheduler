@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-class AddQueScheduler < ActiveRecord::Migration
+class AddQueScheduler < ActiveRecord::Migration[4.2]
   def self.up
     # The current version as of this migration's creation.
-    Que.migrate! :version => 1
+    Que::Scheduler.migrate! :version => 1
   end
 
   def self.down
     # Completely removes Que's job queue.
-    Que.migrate! :version => 0
+    Que::Scheduler.migrate! :version => 0
   end
 end

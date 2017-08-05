@@ -9,7 +9,7 @@ module Que
     class InstallGenerator < Rails::Generators::Base
       include Rails::Generators::Migration
 
-      namespace 'que-scheduler:install'
+      namespace 'que_scheduler:install'
       self.source_paths << File.join(File.dirname(__FILE__), 'templates')
       desc "Generates a migration to add Que Scheduler's job table."
 
