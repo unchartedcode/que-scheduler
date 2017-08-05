@@ -1,26 +1,25 @@
 require 'test_helper'
 
 describe Que::Scheduler::Migrations do
-  it "should be able to perform migrations up and down" do
-    # Migration #1 creates the table with a priority default of 1, migration
-    # #2 ups that to 100.
-
-    default = proc do
-      result = Que.execute <<-SQL
-        select adsrc::boolean
-        from pg_attribute a
-        join pg_class c on c.oid = a.attrelid
-        join pg_attrdef on adrelid = attrelid AND adnum = attnum
-        where relname = 'que_scheduler'
-        and attname = 'enabled'
-      SQL
-
-      result.first[:adsrc]
-    end
-
-    default.call.must_equal false
-
-    # Clean up.
+  before do
+    DB.drop_table? :que_jobs
+    DB.drop_table? :que_scheduler
     Que.migrate!
+  end
+
+  it "it starts out at 0" do
+    Que::Scheduler::Migrations.db_version.must_equal 0
+  end
+
+  it "can migrate to 1" do
+    Que::Scheduler.migrate!
+    Que::Scheduler::Migrations.db_version.must_equal 1
+  end
+
+  it "can migrate back down to 0" do
+    Que::Scheduler.migrate!
+    Que::Scheduler::Migrations.db_version.must_equal 1
+    Que::Scheduler.migrate! version: 0
+    Que::Scheduler::Migrations.db_version.must_equal 0
   end
 end

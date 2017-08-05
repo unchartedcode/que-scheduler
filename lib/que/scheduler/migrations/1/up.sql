@@ -9,6 +9,3 @@ CREATE TABLE que_scheduler
 
   CONSTRAINT que_scheduler_pkey PRIMARY KEY (name)
 );
-
-ALTER TABLE que_jobs
-  ADD COLUMN data jsonb not null default '{}'::jsonb
