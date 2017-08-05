@@ -1,14 +1,19 @@
 require "que/job"
-require "que/scheduler/version"
-require "que/scheduler/migrations"
 require "que/scheduler/util"
-require "que/scheduler/sql"
 require "que/scheduler/schedule"
 require "que/scheduler/scheduled"
 
 module Que
   module Scheduler
+    autoload :Migrations, 'que/scheduler/migrations'
+    autoload :SQL, 'que/scheduler/sql'
+    autoload :Version, 'que/scheduler/version'
+
     class << self
+      def migrate!(version = {:version => Migrations::CURRENT_VERSION})
+        Migrations.migrate!(version)
+      end
+
       def enabled?
         @enabled
       end
@@ -38,3 +43,6 @@ module Que
     end
   end
 end
+
+require "que/adapters/base"
+Que::Adapters::Base::CAST_PROCS[16] = true.method(:==)

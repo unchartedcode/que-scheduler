@@ -2,18 +2,34 @@ module Que
   module Scheduler
     SQL = {
       :get_all => %{
-        SELECT *
+        SELECT que_scheduler.name
+             , que_scheduler.job_class
+             , que_scheduler.args
+             , que_scheduler.description
+             , que_scheduler.every
+             , que_scheduler.enabled
         FROM que_scheduler
       }.freeze,
 
       :get_schedule_by_name => %{
-        SELECT *
+        SELECT que_scheduler.name
+             , que_scheduler.job_class
+             , que_scheduler.args
+             , que_scheduler.description
+             , que_scheduler.every
+             , que_scheduler.enabled
         FROM que_scheduler
         WHERE name = $1::text
       },
 
       :get_schedule_by_job_id => %{
-        SELECT que_scheduler.*, que_jobs.data
+        SELECT que_scheduler.name
+             , que_scheduler.job_class
+             , que_scheduler.args
+             , que_scheduler.description
+             , que_scheduler.every
+             , que_scheduler.enabled
+             , que_jobs.data
         FROM que_scheduler
         JOIN que_jobs
           ON que_jobs.data->'scheduled'->>'name' = que_scheduler.name
@@ -21,7 +37,12 @@ module Que
       },
 
       :get_schedule => %{
-        SELECT *
+        SELECT que_scheduler.name
+             , que_scheduler.job_class
+             , que_scheduler.args
+             , que_scheduler.description
+             , que_scheduler.every
+             , que_scheduler.enabled
         FROM que_scheduler
         WHERE job_class = $1::text
       },
@@ -67,10 +88,17 @@ module Que
       }.freeze,
 
       :get_scheduled_job => %{
-        SELECT job_id
-             , data
-        FROM que_jobs
-        WHERE  data->>'schedule.name' = $1::text
+        SELECT que_scheduler.name
+             , que_scheduler.job_class
+             , que_scheduler.args
+             , que_scheduler.description
+             , que_scheduler.every
+             , que_scheduler.enabled
+             , que_jobs.job_id
+        FROM que_scheduler
+        JOIN que_jobs
+          ON que_jobs.data->'scheduled'->>'name' = que_scheduler.name
+        WHERE que_scheduler.name = $1::text
       }.freeze,
 
       :get_data => %{

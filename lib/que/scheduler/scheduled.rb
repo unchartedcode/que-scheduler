@@ -31,10 +31,10 @@ module Que
 
         super
 
+        new_job = self.class.enqueue(*attrs[:args], run_at: @run_again_at)
         data['scheduled']['start_at'] = @end_at.to_f
         data['scheduled']['end_at']   = @run_again_at.to_f
-        Que.execute(Que::Scheduler::SQL[:update_data], [attrs[:job_id], data])
-        self.class.enqueue(*attrs[:args], run_at: @run_again_at)
+        Que.execute(Que::Scheduler::SQL[:update_data], [new_job.attrs[:job_id], data])
       end
     end
   end
