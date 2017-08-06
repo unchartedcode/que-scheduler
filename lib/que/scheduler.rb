@@ -14,21 +14,6 @@ module Que
         Migrations.migrate!(version)
       end
 
-      def enabled?
-        @enabled
-      end
-
-      def enabled=(value)
-        renenabled = @enabled == false && value == true
-        @enabled = value
-
-        if renenabled
-          Que.reload_schedules!
-        end
-
-        @enabled
-      end
-
       def load_schedule!(schedule)
         Que.log message: 'Loading Schedule'
 
@@ -45,4 +30,6 @@ module Que
 end
 
 require "que/adapters/base"
-Que::Adapters::Base::CAST_PROCS[16] = true.method(:==)
+Que::Adapters::Base::CAST_PROCS[16] = proc { |value| 
+  value == true || value == 't'
+}

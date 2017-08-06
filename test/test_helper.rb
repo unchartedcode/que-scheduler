@@ -3,6 +3,7 @@ require 'que'
 require 'logger'
 require 'pg'
 require 'que/scheduler'
+require 'que/data'
 require 'minitest/autorun'
 
 require 'minitest/reporters'
@@ -51,9 +52,12 @@ DB = Sequel.connect(QUE_URL)
 
 # Reset the table to the most up-to-date version.
 DB.drop_table? :que_jobs
-Que::Migrations.migrate!
+Que.migrate!
+Que::Data.migrate!
+# DB.drop_trigger :que_scheduler, :que_scheduler_insert_job
 DB.drop_table? :que_scheduler
-Que::Scheduler::Migrations.migrate!
+DB.drop_function :que_scheduler_insert_job, if_exists: true
+Que::Scheduler.migrate!
 
 # Test Jobs
 class TestJob < Que::Job
@@ -72,6 +76,12 @@ class ArgsJob < Que::Job
   def run(*args)
     self.class.passed_args = args
     self.class.last_execution = DateTime.now
+  end
+end
+
+class SkipDestroyJob < Que::Job
+  def destroy
+    # Nope
   end
 end
 

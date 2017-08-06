@@ -12,29 +12,40 @@ module Que
         end
       end
 
-      attr_reader :start_at, :end_at, :run_again_at, :time_range
+      attr_reader :schedule
+
+      def scheduled?
+        !@data['scheduler'].nil? && !@data['scheduler']['name'].nil?
+      end
 
       def _run
-        schedule = Que.execute(Que::Scheduler::SQL[:get_schedule_by_job_id], [attrs[:job_id]]).first
-        if schedule && (!schedule['enabled'] || !Que::Scheduler.enabled?)
+        unless scheduled?
+          super
+          return
+        end
+
+        @schedule = Que.execute(Que::Scheduler::SQL[:get_schedule_by_name], [@data['scheduler']['name']]).first || {}
+        if @schedule && !@schedule['enabled']
           destroy unless @destroyed
           return
         end
 
-        data = JSON.parse(schedule.dig('data') || '{}')
-        data['scheduled'] = {} if data['scheduled'].nil?
+        every = Que::Scheduler.parse_in(@schedule['every'])
+        last_executed_at = Time.at(@data['scheduler']['last_executed_at'] || (Time.now - every).to_i)
+        next_execution_at = last_executed_at + every
 
-        @start_at = Time.at(data['scheduled']['start_at'])
-        @end_at = Time.at(data['scheduled']['end_at'])
-        @run_again_at = @end_at + Que::Scheduler.parse_in(schedule['every'])
-        @time_range = @start_at...@end_at
+        if (next_execution_at - 5) <= Time.now
+          super
+        else
+          destroy unless @destroyed
+        end
 
-        super
-
-        new_job = self.class.enqueue(*attrs[:args], run_at: @run_again_at)
-        data['scheduled']['start_at'] = @end_at.to_f
-        data['scheduled']['end_at']   = @run_again_at.to_f
-        Que.execute(Que::Scheduler::SQL[:update_data], [new_job.attrs[:job_id], data])
+        if Que.execute(Que::Scheduler::SQL[:check_job], [@data['scheduler']['name']]).none?
+          run_again_at = Time.now + every
+          new_job = self.class.enqueue(*attrs[:args], run_at: run_again_at)
+          @data['scheduler']['last_executed_at'] = Time.now.to_i
+          Que::Job.update_data(new_job.attrs[:job_id], @data['scheduler'], section: 'scheduler')
+        end
       end
     end
   end

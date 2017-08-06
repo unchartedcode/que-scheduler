@@ -22,20 +22,6 @@ module Que
         WHERE name = $1::text
       },
 
-      :get_schedule_by_job_id => %{
-        SELECT que_scheduler.name
-             , que_scheduler.job_class
-             , que_scheduler.args
-             , que_scheduler.description
-             , que_scheduler.every
-             , que_scheduler.enabled
-             , que_jobs.data
-        FROM que_scheduler
-        JOIN que_jobs
-          ON que_jobs.data->'scheduled'->>'name' = que_scheduler.name
-        WHERE que_jobs.job_id = $1::integer
-      },
-
       :get_schedule => %{
         SELECT que_scheduler.name
              , que_scheduler.job_class
@@ -80,38 +66,10 @@ module Que
         WHERE name = $1::text
       }.freeze,
 
-      :check_job_scheduled => %{
-        SELECT 1 AS one
-        FROM   que_jobs
-        WHERE  job_class = $1::text
-        AND    queue     = $2::text
-      }.freeze,
-
-      :get_scheduled_job => %{
-        SELECT que_scheduler.name
-             , que_scheduler.job_class
-             , que_scheduler.args
-             , que_scheduler.description
-             , que_scheduler.every
-             , que_scheduler.enabled
-             , que_jobs.job_id
-        FROM que_scheduler
-        JOIN que_jobs
-          ON que_jobs.data->'scheduled'->>'name' = que_scheduler.name
-        WHERE que_scheduler.name = $1::text
-      }.freeze,
-
-      :get_data => %{
-        SELECT job_id
-             , data
+      :check_job => %{
+        SELECT 1
         FROM que_jobs
-        WHERE job_id = $1::integer
-      }.freeze,
-
-      :update_data => %{
-        UPDATE que_jobs
-        SET data = $2::jsonb
-        WHERE job_id = $1::integer
+        WHERE que_jobs.data->'scheduler'->>'name' = $1::text
       }.freeze
     }.freeze
   end

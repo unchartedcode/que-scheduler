@@ -4,7 +4,18 @@ describe Que::Scheduler::Migrations do
   before do
     DB.drop_table? :que_jobs
     DB.drop_table? :que_scheduler
+    DB.drop_function :que_scheduler_insert_job, if_exists: true
     Que.migrate!
+  end
+
+  after do
+    # We must reset everything so other tests don't start failing
+    DB.drop_table? :que_jobs
+    DB.drop_table? :que_scheduler
+    DB.drop_function :que_scheduler_insert_job, if_exists: true
+    Que.migrate!
+    Que::Data.migrate!
+    Que::Scheduler.migrate!
   end
 
   it "it starts out at 0" do

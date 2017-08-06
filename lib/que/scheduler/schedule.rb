@@ -8,8 +8,8 @@ module Que
       #       "every" => "1m" 
       #     },
       #     "some_name" => {
-      #       "cron"        => "5/* * * *",
-      #       "class"       => "DoSomeWork",
+      #       "every"       => "2h",
+      #       "job_class"   => "DoSomeWork",
       #       "args"        => "work on this string",
       #       "description" => "this thing works it"s butter off" },
       #     ...
@@ -20,13 +20,10 @@ module Que
       # is used implicitly as "class" argument - in the "MakeTea" example,
       # "MakeTea" is used both as job name and sidekiq worker class.
       #
-      # :cron can be any cron scheduling string
+      # :every determines the interval.
       #
-      # :every can be used in lieu of :cron. see rufus-scheduler's 'every' usage
-      # for valid syntax. If :cron is present it will take precedence over :every.
-      #
-      # :class must be a sidekiq worker class. If it is missing, the job name (hash key)
-      # will be used as :class.
+      # :job_class must be a worker class. If it is missing, the job name (hash key)
+      # will be used as :job_class.
       #
       # :args can be any yaml which will be converted to a ruby literal and
       # passed in a params. (optional)
@@ -41,14 +38,6 @@ module Que
 
       def schedule
         @schedule
-      end
-
-      # Reloads and reprocesses the schedule from PostgresSQL
-      #
-      # @return Hash
-      def reload_schedules!
-        schedule_hash = get_all_schedules
-        load_schedules!(schedule_hash)
       end
 
       # Retrive the schedule configuration for the given name
@@ -79,36 +68,11 @@ module Que
           Que.execute Que::Scheduler::SQL[:insert_schedule], [
             name,
             config['job_class'],
-            [config['args']],
+            Array(config['args']),
             config['description'],
             config['every'],
             config['enabled']
           ]
-        end
-
-        scheduled_job = Que.execute(Que::Scheduler::SQL[:get_scheduled_job], [name]).first
-        if config['enabled'] && Que::Scheduler.enabled?
-          if scheduled_job
-            # Update?
-          else
-            job = Que::Job.enqueue(
-              *config['args'],
-              queue: config['queue'],
-              job_class: config['job_class']
-            )
-
-            data = {
-              scheduled: {
-                name: name,
-                start_at: (Time.now - Que::Scheduler.parse_in(config['every'])).to_f,
-                end_at: Time.now.to_f
-              }
-            }
-
-            Que.execute(Que::Scheduler::SQL[:update_data], [job.attrs[:job_id], data])
-          end
-        else
-          # Remove...
         end
 
         config

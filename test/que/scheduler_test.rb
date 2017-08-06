@@ -12,33 +12,6 @@ describe Que::Scheduler do
       DB[:que_scheduler].delete
     end
 
-    describe 'when scheduler enabled option is false' do
-      let(:job_schedule) do
-        {
-          'some_ivar_job' => {
-            'every' => '10m',
-            'job_class' => 'SomeIvarJob',
-            'args' => { path: '/tmp ' },
-            'enabled' => true
-          }
-        }
-      end
-
-      before do
-        Que::Scheduler.enabled = false
-        Que::Scheduler.load_schedule!(job_schedule)
-      end
-
-      it 'does not increase the jobs amount' do
-        jobs = Que.job_stats.select { |s| s['job_class'] == 'SomeIvarJob' }
-        assert_equal 0, jobs.size
-      end
-
-      it 'does include in scheduled jobs' do
-        refute_nil Que.get_schedule('some_ivar_job')
-      end
-    end
-
     describe 'when job enabled option is false' do
       let(:job_schedule) do
         {
@@ -52,7 +25,6 @@ describe Que::Scheduler do
       end
 
       before do
-        Que::Scheduler.enabled = true
         Que::Scheduler.load_schedule!(job_schedule)
       end
 
@@ -79,7 +51,6 @@ describe Que::Scheduler do
       end
 
       before do
-        Que::Scheduler.enabled = true
         Que::Scheduler.load_schedule!(job_schedule)
       end
 
@@ -100,7 +71,7 @@ describe Que::Scheduler do
     let(:schedule_time) { Time.now }
     let(:args) { '/tmp' }
     let(:scheduler_config) do
-      { 'job_class' => 'TestJob', 'queue' => 'high', 'args'  => args, 'cron' => '* * * * *' }
+      { 'job_class' => 'TestJob', 'queue' => 'high', 'args'  => args, 'every' => '1d' }
     end
 
     describe 'when it is a que job' do
@@ -129,13 +100,9 @@ describe Que::Scheduler do
             'TestJob',
             ['/tmp'],
             nil,
-            nil,
+            '1d',
             nil
           ]
-        ]
-        mock_execute.expect :call, [{}], [
-          Que::Scheduler::SQL[:get_scheduled_job],
-          ['test']
         ]
         mock_execute.expect :call, [
           {
