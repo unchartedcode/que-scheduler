@@ -51,4 +51,8 @@ module Que
   end
 end
 
+if defined? Que::Data::Extension
+  fail "que/data must be defined after que/scheduler"
+end
+
 Que::Job.prepend Que::Scheduler::Scheduled

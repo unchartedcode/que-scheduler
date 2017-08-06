@@ -57,7 +57,6 @@ module Que
           , args = coalesce($3, '[]')::json
           , description = coalesce($4, '')::text
           , every = coalesce($5, '')::text
-          , enabled = coalesce($6, false)::boolean
         RETURNING *
       }.freeze,
 

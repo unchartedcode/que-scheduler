@@ -36,6 +36,13 @@ describe Que::Scheduler do
       it 'does include in scheduled jobs' do
         refute_nil Que.get_schedule('some_ivar_job')
       end
+
+      it 'does not change the enabled value in the table' do
+        DB[:que_scheduler].update(enabled: true)
+        DB[:que_scheduler].first[:enabled].must_equal true
+        Que::Scheduler.load_schedule!(job_schedule)
+        DB[:que_scheduler].first[:enabled].must_equal true
+      end
     end
 
     describe 'when job enabled option is true' do
