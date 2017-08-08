@@ -2,8 +2,8 @@ require 'test_helper'
 
 describe Que::Job, '.run' do
   before do
-    DB[:que_jobs].delete
     DB[:que_scheduler].delete
+    DB[:que_jobs].delete
     ArgsJob.passed_args = nil
     ArgsJob.last_execution = nil
   end
@@ -155,12 +155,7 @@ describe Que::Job, '.run' do
     it "should skip the process if enabled is later set to false" do
       DB[:que_jobs].count.must_equal 1
       DB[:que_scheduler].update(enabled: false)
-
-      result = Que::Job.work
-      result[:event].must_equal :job_worked, result[:error]
-      result[:job][:job_class].must_equal 'ArgsJob'
       DB[:que_jobs].count.must_equal 0
-      ArgsJob.last_execution.must_be_nil
     end
 
     it "should process the job and reschedule it" do
@@ -172,7 +167,7 @@ describe Que::Job, '.run' do
       # It should schedule a second copy
       DB[:que_jobs].count.must_equal 1
       row = DB[:que_jobs].first
-      row[:run_at].must_be_close_to Time.now + 60, 5
+      row[:run_at].must_be_close_to Time.now - Time.now.sec + 60, 5
       row[:job_class].must_equal 'ArgsJob'
       row[:error_count].must_equal 0
       row[:last_error].must_be_nil
@@ -203,14 +198,14 @@ describe Que::Job, '.run' do
       DB[:que_scheduler].first[:expression].must_equal '0 */2 * * *'
 
       DB[:que_jobs].count.must_equal 1
-      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) + ((((Time.now.hour / 2) + 1) * 2) * 60 * 60), 5
+      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) - Time.now.sec + ((((Time.now.hour / 2) + 1) * 2) * 60 * 60), 5
 
       # Update the schedule
       Que.set_schedule('test_job', job_schedule['test_job'].merge({ 'expression' => '@hourly' }))
       DB[:que_scheduler].first[:expression].must_equal '@hourly'
 
       # It resets the run_at to an hour from now
-      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) + ((Time.now.hour + 1) * 60 * 60), 5
+      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) - Time.now.sec + ((Time.now.hour + 1) * 60 * 60), 5
 
       # It won't run the job
       result = Que::Job.work
@@ -222,12 +217,12 @@ describe Que::Job, '.run' do
       DB[:que_scheduler].first[:enabled].must_equal true
 
       DB[:que_jobs].count.must_equal 1
-      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) + ((((Time.now.hour / 2) + 1) * 2) * 60 * 60), 5
+      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) - Time.now.sec + ((((Time.now.hour / 2) + 1) * 2) * 60 * 60), 5
 
       # Update the schedule
       DB[:que_scheduler].update(enabled: false)
       DB[:que_scheduler].first[:enabled].must_equal false
-      DB[:que_jobs].count.must_equal 1
+      DB[:que_jobs].count.must_equal 0
     end
   end
 end

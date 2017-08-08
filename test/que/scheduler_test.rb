@@ -8,8 +8,8 @@ describe Que::Scheduler do
 
   describe 'load_schedule' do
     before do
-      DB[:que_jobs].delete
       DB[:que_scheduler].delete
+      DB[:que_jobs].delete
     end
 
     describe 'when job enabled option is false' do

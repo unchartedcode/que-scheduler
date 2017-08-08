@@ -54,6 +54,8 @@ DB = Sequel.connect(QUE_URL)
 DB.drop_table? :que_jobs
 DB.drop_table? :que_scheduler
 DB.drop_function :que_scheduler_insert_job, if_exists: true
+DB.drop_function :que_scheduler_update_job, if_exists: true
+DB.drop_function :que_jobs_reschedule_job, if_exists: true
 DB.drop_function :que_scheduler_parse_cron, args: [:text], if_exists: true
 Que.migrate!
 Que::Data.migrate!

@@ -1,7 +1,6 @@
 require "que/job"
 require "que/scheduler/util"
 require "que/scheduler/schedule"
-require "que/scheduler/scheduled"
 
 module Que
   module Scheduler
