@@ -29,7 +29,7 @@ AS $$
     cron := replace(cron, '@daily',   '0 0 * * *');
     cron := replace(cron, '@hourly',  '0 * * * *');
 
-    WITH parsed_line as (
+    WITH RECURSIVE parsed_line as (
       SELECT CASE row_number() over() 
                WHEN 1 THEN 'minute'
                WHEN 2 THEN 'hour'
@@ -87,18 +87,20 @@ AS $$
       , MAX(CASE WHEN key = 'month' THEN value END) as month
       , MAX(CASE WHEN key = 'dow' THEN value END) as dow
       FROM parsed_array
-    ), dates as (
-      select date_trunc('second', generate_series($2 + interval '1 minute', $2 + interval '1 minute' + interval '1 year', '1 minute'::interval)) date
+    ), dates(date,n) as (
+      select date_trunc('minute', $2 + interval '1 minute') date, 1 as n
+      union all
+      select date_trunc('minute', $2 + interval '1 minute' * (n+1)) date, n+1 as n
+      from dates
     )
-    select dates.date
-    into time_specs
+    select parsed.dom, dates.date
+    INTO time_specs
     from dates, parsed
     where parsed.month && array[date_part('month', date)::int] 
       and parsed.hour && array[date_part('hour', date)::int]
       and parsed.minute && array[date_part('minute', date)::int]
       and parsed.dom && array[date_part('day', date)::int]
       and parsed.dow && array[date_part('dow', date)::int]
-    order by date asc
     limit 1;
 
     RETURN time_specs.date;
