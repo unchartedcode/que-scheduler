@@ -37,14 +37,28 @@ AS $$
                WHEN 4 THEN 'month'
                WHEN 5 THEN 'dow'
              END as key
-           , regexp_split_to_array(t[1], '/') as value
+           , t[1] as value
       FROM regexp_matches(cron, '[^\s]+', 'g') as t
-    ), parsed_array as (
+    ), parsed_comma(key, value, modifier) as (
       SELECT  key
-           ,  CASE 
-                WHEN value[2] IS NOT NULL THEN
+           ,  r.r
+           ,  regexp_split_to_array(r.r, '/')
+      FROM parsed_line, regexp_split_to_table(value, ',') r
+    ), parsed_values as (
+      SELECT key
+           , value
+           , CASE 
+                WHEN value = '*' THEN
+                  CASE key
+                    WHEN 'minute' THEN ARRAY(SELECT generate_series(0,59))
+                    WHEN 'hour'   THEN ARRAY(SELECT generate_series(0,23))
+                    WHEN 'dom'    THEN ARRAY(SELECT generate_series(1,31))
+                    WHEN 'month'  THEN ARRAY(SELECT generate_series(1,12))
+                    WHEN 'dow'    THEN ARRAY(SELECT generate_series(0,6))
+                  END
+                WHEN value ~ '/' THEN
                   CASE
-                    WHEN value[1] = '*' THEN
+                    WHEN modifier[1] = '*' THEN
                       CASE key
                         WHEN 'minute' THEN array(select generate_series(0,59))
                         WHEN 'hour'   THEN array(select generate_series(0,23))
@@ -52,56 +66,151 @@ AS $$
                         WHEN 'month'  THEN array(select generate_series(1,12))
                         WHEN 'dow'    THEN array(select generate_series(0,6))
                       END
-                    WHEN value[1] ILIKE '%-%' THEN
-                      ARRAY(select generate_series(x[1]::int, x[2]::int) FROM regexp_matches(value[1], '([^\-]*)\-([^\-]*)') x)
                     ELSE
-                      null
-                    END & ARRAY[CASE key
-                                  WHEN 'minute' THEN array(select x from generate_series(0,59) x where x % value[2]::int = 0)
-                                  WHEN 'hour' THEN array(select x from generate_series(0,23) x where x % value[2]::int = 0)
-                                  WHEN 'dom' THEN array(select x from generate_series(1,31) x where x % value[2]::int = 0)
-                                  WHEN 'month' THEN array(select x from generate_series(1,12) x where x % value[2]::int = 0)
-                                  WHEN 'dow' THEN array(select x from generate_series(0,6) x where x % value[2]::int = 0)
-                                END]
-                WHEN value[1] = '*' THEN
-                  CASE key
-                    WHEN 'minute' THEN array(select generate_series(0,59))
-                    WHEN 'hour'   THEN array(select generate_series(0,23))
-                    WHEN 'dom'    THEN array(select generate_series(1,31))
-                    WHEN 'month'  THEN array(select generate_series(1,12))
-                    WHEN 'dow'    THEN array(select generate_series(0,6))
-                  END
-                WHEN value[1] ilike '%,%' then
-                  ARRAY(select x::integer from regexp_split_to_table(value[1], ',') x)
-                WHEN value[1] ilike '%-%' then 
-                  ARRAY(select generate_series(x[1]::int, x[2]::int) FROM regexp_matches(value[1], '([^\-]*)\-([^\-]*)') x)
+                      ARRAY(
+                        SELECT generate_series(y[1]::int, y[2]::int) 
+                        FROM regexp_matches(modifier[1], '([^\-]*)\-([^\-]*)') y
+                      )
+                  END & 
+                  ARRAY(
+                    SELECT value
+                    FROM (
+                      SELECT y[1]::int as start, generate_series(y[1]::int, y[2]::int) as value
+                      FROM regexp_matches(modifier[1], '([^\-]*)\-([^\-]*)') y
+                      WHERE modifier[1] ~ '-'
+                      UNION ALL
+                      SELECT CASE key
+                               WHEN 'minute' THEN 0
+                               WHEN 'hour'   THEN 0
+                               WHEN 'dom'    THEN 1
+                               WHEN 'month'  THEN 1
+                               WHEN 'dow'    THEN 0
+                             END as start, 
+                             generate_series(
+                               CASE key
+                                 WHEN 'minute' THEN 0
+                                 WHEN 'hour'   THEN 0
+                                 WHEN 'dom'    THEN 1
+                                 WHEN 'month'  THEN 1
+                                 WHEN 'dow'    THEN 0
+                               END, 
+                               CASE key
+                                 WHEN 'minute' THEN 59
+                                 WHEN 'hour'   THEN 23
+                                 WHEN 'dom'    THEN 31
+                                 WHEN 'month'  THEN 12
+                                 WHEN 'dow'    THEN 6
+                               END
+                             ) as value
+                      WHERE modifier[1] !~ '-'
+                    ) value
+                    WHERE (value - start) % modifier[2]::int = 0
+                  )
+                WHEN value ~ '-' THEN
+                  ARRAY(
+                    SELECT generate_series(y[1]::int, y[2]::int) 
+                    FROM regexp_matches(value, '([^\-]*)\-([^\-]*)') y
+                  )
                 ELSE
-                  ARRAY(select generate_series(value[1]::int, value[1]::int))
-              END as value
-      FROM parsed_line
-    ), parsed as (
-      SELECT
-        MAX(CASE WHEN key = 'minute' THEN value END) as minute
-      , MAX(CASE WHEN key = 'hour' THEN value END) as hour
-      , MAX(CASE WHEN key = 'dom' THEN value END) as dom
-      , MAX(CASE WHEN key = 'month' THEN value END) as month
-      , MAX(CASE WHEN key = 'dow' THEN value END) as dow
-      FROM parsed_array
+                  ARRAY(SELECT generate_series(
+                    CASE
+                      WHEN key = 'dow' THEN
+                        CASE 
+                          WHEN value ILIKE 'SUN' THEN '0'
+                          WHEN value ILIKE 'MON' THEN '1'
+                          WHEN value ILIKE 'TUE' THEN '2'
+                          WHEN value ILIKE 'WED' THEN '3'
+                          WHEN value ILIKE 'THU' THEN '4'
+                          WHEN value ILIKE 'FRI' THEN '5'
+                          WHEN value ILIKE 'SAT' THEN '6'
+                          ELSE value
+                        END
+                      WHEN key = 'month' THEN
+                        CASE 
+                          WHEN value ILIKE 'JAN' THEN '1'
+                          WHEN value ILIKE 'FEB' THEN '2'
+                          WHEN value ILIKE 'MAR' THEN '3'
+                          WHEN value ILIKE 'APR' THEN '4'
+                          WHEN value ILIKE 'MAY' THEN '5'
+                          WHEN value ILIKE 'JUN' THEN '6'
+                          WHEN value ILIKE 'JUL' THEN '7'
+                          WHEN value ILIKE 'AUG' THEN '8'
+                          WHEN value ILIKE 'SEP' THEN '9'
+                          WHEN value ILIKE 'OCT' THEN '10'
+                          WHEN value ILIKE 'NOV' THEN '11'
+                          WHEN value ILIKE 'DEC' THEN '12'
+                          ELSE value
+                        END
+                      ELSE value
+                    END::int
+                    ,
+                    CASE
+                      WHEN key = 'dow' THEN
+                        CASE 
+                          WHEN value ILIKE 'SUN' THEN '0'
+                          WHEN value ILIKE 'MON' THEN '1'
+                          WHEN value ILIKE 'TUE' THEN '2'
+                          WHEN value ILIKE 'WED' THEN '3'
+                          WHEN value ILIKE 'THU' THEN '4'
+                          WHEN value ILIKE 'FRI' THEN '5'
+                          WHEN value ILIKE 'SAT' THEN '6'
+                          ELSE value
+                        END
+                      WHEN key = 'month' THEN
+                        CASE 
+                          WHEN value ILIKE 'JAN' THEN '1'
+                          WHEN value ILIKE 'FEB' THEN '2'
+                          WHEN value ILIKE 'MAR' THEN '3'
+                          WHEN value ILIKE 'APR' THEN '4'
+                          WHEN value ILIKE 'MAY' THEN '5'
+                          WHEN value ILIKE 'JUN' THEN '6'
+                          WHEN value ILIKE 'JUL' THEN '7'
+                          WHEN value ILIKE 'AUG' THEN '8'
+                          WHEN value ILIKE 'SEP' THEN '9'
+                          WHEN value ILIKE 'OCT' THEN '10'
+                          WHEN value ILIKE 'NOV' THEN '11'
+                          WHEN value ILIKE 'DEC' THEN '12'
+                          ELSE value
+                        END
+                      ELSE value
+                    END::int)
+                  )
+              END as includes
+      FROM parsed_comma
     ), dates(date,n) as (
-      select date_trunc('minute', $2 + interval '1 minute') date, 1 as n
-      union all
-      select date_trunc('minute', $2 + interval '1 minute' * (n+1)) date, n+1 as n
-      from dates
+      SELECT date_trunc('minute', $2 + interval '1 minute') date, 1 as n
+      UNION ALL
+      SELECT date_trunc('minute', $2 + interval '1 minute' * (n+1)) date, n+1 as n
+      FROM dates
+      -- To avoid an infinite loop (pretty high number of iterations here)
+      -- This should effectively allow for looking ahead a full year. 
+      WHERE n < 525600 -- (60*24*365)
     )
-    select parsed.dom, dates.date
+    SELECT dates.date
     INTO time_specs
-    from dates, parsed
-    where parsed.month && array[date_part('month', date)::int] 
-      and parsed.hour && array[date_part('hour', date)::int]
-      and parsed.minute && array[date_part('minute', date)::int]
-      and parsed.dom && array[date_part('day', date)::int]
-      and parsed.dow && array[date_part('dow', date)::int]
-    limit 1;
+    FROM dates
+    WHERE EXISTS (
+      SELECT 1
+      FROM parsed_values
+      WHERE parsed_values.key = 'month' and (parsed_values.includes && array[date_part('month', date)::int])
+    ) AND EXISTS (
+      SELECT 1
+      FROM parsed_values
+      WHERE parsed_values.key = 'hour' and (parsed_values.includes && array[date_part('hour', date)::int])
+    ) AND EXISTS (
+      SELECT 1
+      FROM parsed_values
+      WHERE parsed_values.key = 'minute' and (parsed_values.includes && array[date_part('minute', date)::int])
+    ) AND EXISTS (
+      SELECT 1
+      FROM parsed_values
+      WHERE parsed_values.key = 'dom' and (parsed_values.includes && array[date_part('day', date)::int])
+    ) AND EXISTS (
+      SELECT 1
+      FROM parsed_values
+      WHERE parsed_values.key = 'dow' and (parsed_values.includes && array[date_part('dow', date)::int])
+    )
+    LIMIT 1;
 
     RETURN time_specs.date;
   END;
