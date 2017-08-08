@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS intarray;
-
 CREATE TABLE que_scheduler
 (
   name        text        NOT NULL,
