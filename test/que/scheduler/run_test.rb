@@ -203,14 +203,14 @@ describe Que::Job, '.run' do
       DB[:que_scheduler].first[:expression].must_equal '0 */2 * * *'
 
       DB[:que_jobs].count.must_equal 1
-      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now - (Time.now.min * 60) + (2 * 60 * 60)), 5
+      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) + ((((Time.now.hour / 2) + 1) * 2) * 60 * 60), 5
 
       # Update the schedule
       Que.set_schedule('test_job', job_schedule['test_job'].merge({ 'expression' => '@hourly' }))
       DB[:que_scheduler].first[:expression].must_equal '@hourly'
 
       # It resets the run_at to an hour from now
-      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now - (Time.now.min * 60) + (1 * 60 * 60)), 5
+      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) + ((Time.now.hour + 1) * 60 * 60), 5
 
       # It won't run the job
       result = Que::Job.work
@@ -222,7 +222,7 @@ describe Que::Job, '.run' do
       DB[:que_scheduler].first[:enabled].must_equal true
 
       DB[:que_jobs].count.must_equal 1
-      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now - (Time.now.min * 60) + (2 * 60 * 60)), 5
+      DB[:que_jobs].first[:run_at].must_be_close_to Time.now - (Time.now.hour * 60 * 60) - (Time.now.min * 60) + ((((Time.now.hour / 2) + 1) * 2) * 60 * 60), 5
 
       # Update the schedule
       DB[:que_scheduler].update(enabled: false)
