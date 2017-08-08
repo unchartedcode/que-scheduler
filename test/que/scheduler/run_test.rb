@@ -172,7 +172,7 @@ describe Que::Job, '.run' do
 
     it "should skip the process if enabled is later set to false" do
       DB[:que_jobs].count.must_equal 1
-      Que.set_schedule('test_job', job_schedule['test_job'].merge({ 'enabled' => false }))
+      DB[:que_scheduler].update(enabled: false)
 
       result = Que::Job.work
       result[:event].must_equal :job_worked, result[:error]
@@ -205,6 +205,28 @@ describe Que::Job, '.run' do
       result = Que::Job.work
       result[:event].must_equal :job_worked, result[:error]
       ArgsJob.last_execution.must_be_nil
+    end
+
+    it "should immediately reevaluate the job if enabled is changed" do
+      DB[:que_scheduler].count.must_equal 1
+      DB[:que_scheduler].first[:enabled].must_equal true
+
+      DB[:que_jobs].count.must_equal 1
+      DB[:que_jobs].first[:run_at].must_be_close_to Time.now, 0.5
+
+      # Work the first job
+      result = Que::Job.work
+      result[:event].must_equal :job_worked, result[:error]
+      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now + (2 * 60 * 60)), 0.5
+      ArgsJob.last_execution = nil
+
+      # Update the schedule
+      DB[:que_scheduler].update(enabled: false)
+      DB[:que_scheduler].first[:enabled].must_equal false
+      DB[:que_jobs].count.must_equal 1
+      result = Que::Job.work
+      result[:event].must_equal :job_worked, result[:error]
+      DB[:que_jobs].count.must_equal 0
     end
   end
 end

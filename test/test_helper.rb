@@ -52,11 +52,11 @@ DB = Sequel.connect(QUE_URL)
 
 # Reset the table to the most up-to-date version.
 DB.drop_table? :que_jobs
-Que.migrate!
-Que::Data.migrate!
-# DB.drop_trigger :que_scheduler, :que_scheduler_insert_job
 DB.drop_table? :que_scheduler
 DB.drop_function :que_scheduler_insert_job, if_exists: true
+DB.drop_function :que_scheduler_parse_cron, args: [:text], if_exists: true
+Que.migrate!
+Que::Data.migrate!
 Que::Scheduler.migrate!
 
 # Test Jobs
