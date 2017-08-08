@@ -1,8 +1,6 @@
 # Que::Scheduler
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/que/scheduler`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+Adds a `que_scheduler` table to keep track of and schedule recurring jobs for [Que](https://github.com/chanks/que)
 
 ## Installation
 
@@ -22,7 +20,7 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+Internal Use Only
 
 ## Development
 
@@ -32,5 +30,5 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/que-scheduler.
+Bug reports and pull requests are welcome on GitHub at https://github.com/unchartedcode/que-scheduler.
 
