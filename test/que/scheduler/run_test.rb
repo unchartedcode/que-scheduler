@@ -21,7 +21,7 @@ describe Que::Job, '.run' do
     let(:job_schedule) do
       {
         'test_job' => {
-          'every' => '10m',
+          'expression' => '*/10 * * * *',
           'job_class' => 'SkipDestroyJob',
           'args' => [1, 'two', {three: 3}],
           'enabled' => false
@@ -37,7 +37,7 @@ describe Que::Job, '.run' do
       DB[:que_scheduler].count.must_equal 1
 
       row = DB[:que_scheduler].first
-      row[:every].must_equal '10m'
+      row[:expression].must_equal '*/10 * * * *'
       row[:job_class].must_equal 'SkipDestroyJob'
       JSON.parse(row[:args]).must_equal [1,"two",{"three" => 3}]
       row[:enabled].must_equal false
@@ -71,7 +71,7 @@ describe Que::Job, '.run' do
     let(:job_schedule) do
       {
         'test_job' => {
-          'every' => '10m',
+          'expression' => '* * * * *',
           'job_class' => 'SkipDestroyJob',
           'args' => [1, 'two', {three: 3}],
           'enabled' => true
@@ -113,11 +113,11 @@ describe Que::Job, '.run' do
     end
   end
 
-  describe "job processing" do
+  describe "with arg job" do
     let(:job_schedule) do
       {
         'test_job' => {
-          'every' => '2h',
+          'expression' => '* * * * *',
           'job_class' => 'ArgsJob',
           'args' => [1, 'two', {three: 3}],
           'enabled' => true
@@ -127,24 +127,6 @@ describe Que::Job, '.run' do
 
     before do
       Que::Scheduler.load_schedule!(job_schedule)
-    end
-
-    it "should process the job and reschedule it" do
-      DB[:que_jobs].count.must_equal 1
-
-      result = Que::Job.work
-      result[:event].must_equal :job_worked, result[:error]
-
-      # It should schedule a second copy
-      DB[:que_jobs].count.must_equal 1
-      row = DB[:que_jobs].first
-      row[:run_at].must_be_close_to (Time.now + (2 * 60 * 60)), 0.5
-      row[:job_class].must_equal 'ArgsJob'
-      row[:error_count].must_equal 0
-      row[:last_error].must_be_nil
-      data = JSON.parse(row[:data])
-      data.dig('scheduler', 'name').must_equal 'test_job'
-      data.dig('scheduler', 'last_executed_at').must_be_close_to Time.now.to_i
     end
 
     it "should process the job with the arguments given to it" do
@@ -181,52 +163,71 @@ describe Que::Job, '.run' do
       ArgsJob.last_execution.must_be_nil
     end
 
-    it "should immediately reevaluate the job if the schedule is changed" do
-      DB[:que_scheduler].count.must_equal 1
-      DB[:que_scheduler].first[:every].must_equal '2h'
-
+    it "should process the job and reschedule it" do
       DB[:que_jobs].count.must_equal 1
-      DB[:que_jobs].first[:run_at].must_be_close_to Time.now, 0.5
 
-      # Work the first job
       result = Que::Job.work
       result[:event].must_equal :job_worked, result[:error]
-      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now + (2 * 60 * 60)), 0.5
-      ArgsJob.last_execution = nil
 
-      # Update the schedule
-      Que.set_schedule('test_job', job_schedule['test_job'].merge({ 'every' => '1h' }))
-      DB[:que_scheduler].first[:every].must_equal '1h'
+      # It should schedule a second copy
+      DB[:que_jobs].count.must_equal 1
+      row = DB[:que_jobs].first
+      row[:run_at].must_be_close_to Time.now + 60, 5
+      row[:job_class].must_equal 'ArgsJob'
+      row[:error_count].must_equal 0
+      row[:last_error].must_be_nil
+      data = JSON.parse(row[:data])
+      data.dig('scheduler', 'name').must_equal 'test_job'
+      data.dig('scheduler', 'last_executed_at').must_be_close_to Time.now.to_i
+    end
+  end
 
-      # It resets the run_at to right now
-      DB[:que_jobs].first[:run_at].must_be_close_to Time.now, 0.5
-
-      # It should run the job to re-evaluate but will skip the content
-      result = Que::Job.work
-      result[:event].must_equal :job_worked, result[:error]
-      ArgsJob.last_execution.must_be_nil
+  describe "job processing" do
+    let(:job_schedule) do
+      {
+        'test_job' => {
+          'expression' => '0 */2 * * *',
+          'job_class' => 'ArgsJob',
+          'args' => [1, 'two', {three: 3}],
+          'enabled' => true
+        }
+      }
     end
 
-    it "should immediately reevaluate the job if enabled is changed" do
+    before do
+      Que::Scheduler.load_schedule!(job_schedule)
+    end
+
+    it "should immediately reschedule the job if the schedule is changed" do
+      DB[:que_scheduler].count.must_equal 1
+      DB[:que_scheduler].first[:expression].must_equal '0 */2 * * *'
+
+      DB[:que_jobs].count.must_equal 1
+      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now - (Time.now.min * 60) + (2 * 60 * 60)), 5
+
+      # Update the schedule
+      Que.set_schedule('test_job', job_schedule['test_job'].merge({ 'expression' => '@hourly' }))
+      DB[:que_scheduler].first[:expression].must_equal '@hourly'
+
+      # It resets the run_at to an hour from now
+      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now - (Time.now.min * 60) + (1 * 60 * 60)), 5
+
+      # It won't run the job
+      result = Que::Job.work
+      result[:event].must_equal :job_unavailable, result[:error]
+    end
+
+    it "should immediately reschedule the job if enabled is changed" do
       DB[:que_scheduler].count.must_equal 1
       DB[:que_scheduler].first[:enabled].must_equal true
 
       DB[:que_jobs].count.must_equal 1
-      DB[:que_jobs].first[:run_at].must_be_close_to Time.now, 0.5
-
-      # Work the first job
-      result = Que::Job.work
-      result[:event].must_equal :job_worked, result[:error]
-      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now + (2 * 60 * 60)), 0.5
-      ArgsJob.last_execution = nil
+      DB[:que_jobs].first[:run_at].must_be_close_to (Time.now - (Time.now.min * 60) + (2 * 60 * 60)), 5
 
       # Update the schedule
       DB[:que_scheduler].update(enabled: false)
       DB[:que_scheduler].first[:enabled].must_equal false
       DB[:que_jobs].count.must_equal 1
-      result = Que::Job.work
-      result[:event].must_equal :job_worked, result[:error]
-      DB[:que_jobs].count.must_equal 0
     end
   end
 end

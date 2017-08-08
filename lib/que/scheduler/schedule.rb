@@ -70,7 +70,7 @@ module Que
             config['job_class'],
             Array(config['args']),
             config['description'],
-            config['every'],
+            config['expression'],
             config['enabled']
           ]
         end

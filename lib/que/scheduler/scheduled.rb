@@ -1,17 +1,6 @@
 module Que
   module Scheduler
     module Scheduled
-      # Default repetition interval in seconds. Can be overridden in
-      # subclasses. Can use 1.minute if using Rails.
-      @interval = 60
-
-      class << self
-        attr_reader :interval
-        def every(interval)
-          @interval = interval
-        end
-      end
-
       attr_reader :schedule
 
       def scheduled?
@@ -30,18 +19,16 @@ module Que
           return
         end
 
-        every = Que::Scheduler.parse_in(@schedule['every'])
-        last_executed_at = Time.at(@data['scheduler']['last_executed_at'] || (Time.now - every).to_i)
-        next_execution_at = last_executed_at + every
+        # next_executed_at = Que.execute(Que::Scheduler::SQL[:parse_cron], [@schedule['expression']]).first
 
-        if (next_execution_at - 5) <= Time.now
+        # if (next_execution_at - 5) <= Time.now
           super
-        else
-          destroy unless @destroyed
-        end
+        # else
+        #   destroy unless @destroyed
+        # end
 
         if Que.execute(Que::Scheduler::SQL[:check_job], [@data['scheduler']['name']]).none?
-          run_again_at = Time.now + every
+          run_again_at = Que.execute(Que::Scheduler::SQL[:parse_cron], [@schedule['expression']]).first[:next_at]
           new_job = self.class.enqueue(*attrs[:args], run_at: run_again_at)
           @data['scheduler']['last_executed_at'] = Time.now.to_i
           Que::Job.update_data(new_job.attrs[:job_id], @data['scheduler'], section: 'scheduler')

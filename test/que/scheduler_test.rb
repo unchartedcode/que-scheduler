@@ -16,7 +16,7 @@ describe Que::Scheduler do
       let(:job_schedule) do
         {
           'some_ivar_job' => {
-            'every' => '10m',
+            'expression' => '*/10 * * * *',
             'job_class' => 'SomeIvarJob',
             'args' => [ '/tmp' ],
             'enabled' => false
@@ -49,7 +49,7 @@ describe Que::Scheduler do
       let(:job_schedule) do
         {
           'some_ivar_job' => {
-            'every' => '10m',
+            'expression' => '*/10 * * * * ',
             'job_class' => 'SomeIvarJob',
             'args' => { path: '/tmp ' },
             'enabled' => true
@@ -78,7 +78,7 @@ describe Que::Scheduler do
     let(:schedule_time) { Time.now }
     let(:args) { '/tmp' }
     let(:scheduler_config) do
-      { 'job_class' => 'TestJob', 'queue' => 'high', 'args'  => args, 'every' => '1d' }
+      { 'job_class' => 'TestJob', 'queue' => 'high', 'args'  => args, 'expression' => '@daily' }
     end
 
     describe 'when it is a que job' do
@@ -107,7 +107,7 @@ describe Que::Scheduler do
             'TestJob',
             ['/tmp'],
             nil,
-            '1d',
+            '@daily',
             nil
           ]
         ]

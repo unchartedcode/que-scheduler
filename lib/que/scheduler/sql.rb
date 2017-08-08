@@ -6,7 +6,7 @@ module Que
              , que_scheduler.job_class
              , que_scheduler.args
              , que_scheduler.description
-             , que_scheduler.every
+             , que_scheduler.expression
              , que_scheduler.enabled
         FROM que_scheduler
       }.freeze,
@@ -16,7 +16,7 @@ module Que
              , que_scheduler.job_class
              , que_scheduler.args
              , que_scheduler.description
-             , que_scheduler.every
+             , que_scheduler.expression
              , que_scheduler.enabled
         FROM que_scheduler
         WHERE name = $1::text
@@ -27,7 +27,7 @@ module Que
              , que_scheduler.job_class
              , que_scheduler.args
              , que_scheduler.description
-             , que_scheduler.every
+             , que_scheduler.expression
              , que_scheduler.enabled
         FROM que_scheduler
         WHERE job_class = $1::text
@@ -40,7 +40,7 @@ module Que
           job_class,
           args,
           description,
-          every,
+          expression,
           enabled
         )
         VALUES
@@ -56,7 +56,7 @@ module Que
         SET job_class = coalesce($2, '')::text
           , args = coalesce($3, '[]')::json
           , description = coalesce($4, '')::text
-          , every = coalesce($5, '')::text
+          , expression = coalesce($5, '')::text
         RETURNING *
       }.freeze,
 
@@ -69,6 +69,11 @@ module Que
         SELECT 1
         FROM que_jobs
         WHERE que_jobs.data->'scheduler'->>'name' = $1::text
+      }.freeze,
+
+      :parse_cron => %{
+        SELECT que_scheduler_parse_cron.que_scheduler_parse_cron as next_at
+        FROM que_scheduler_parse_cron($1::text, now())
       }.freeze
     }.freeze
   end
