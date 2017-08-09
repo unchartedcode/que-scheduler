@@ -95,11 +95,40 @@ describe 'cron' do
       ["15-59/15 * * * *",      "2014-02-01 15:46",  "2014-02-01 16:15"],
       ["1-20/3 * * * *",        "2014-02-01 15:56",  "2014-02-01 16:01"],
       ["1-9/3,15-30/4 * * * *", "2014-02-01 15:56",  "2014-02-01 16:01"],
-
     ].each do |line, now, expected_next, num|
       it "returns #{expected_next} for '#{line}' when now is #{now}" do
         assert_time(now, expected_next, line)
       end
+    end
+  end
+
+  describe 'complex' do
+    # Checks every minute for a single day to ensure it calculates the right cutoff times
+    line = '0 0-3/3,10-22/3 * * *'
+    now = Time.parse("2017-08-08 00:00:00")
+    while now < Time.parse("2017-08-08 23:00:00")
+      case now.hour
+      when 0..2
+        expected_next = "2017-08-08 03:00"
+      when 3..9
+        expected_next = "2017-08-08 10:00"
+      when 10..12
+        expected_next = "2017-08-08 13:00"
+      when 13..15
+        expected_next = "2017-08-08 16:00"
+      when 16..18
+        expected_next = "2017-08-08 19:00"
+      when 19..21
+        expected_next = "2017-08-08 22:00"
+      when 22..23
+        expected_next = "2017-08-09 00:00"
+      end
+      
+      it "returns #{expected_next} for '#{line}' when now is #{now}" do
+        assert_time(now.strftime('%F %H:%M:%S'), expected_next, line)
+      end
+
+      now += 60
     end
   end
 
